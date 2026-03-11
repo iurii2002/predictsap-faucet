@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PredictSwap Faucet</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+<style>
+  :root {
+    --bg:       #080b0f;
+    --panel:    #0d1117;
+    --border:   #1c2430;
+    --border2:  #243040;
+    --green:    #00e5a0;
+    --green-dim:#00e5a022;
+    --red:      #ff4d6d;
+    --red-dim:  #ff4d6d18;
+    --amber:    #f5a623;
+    --text:     #c9d4e0;
+    --muted:    #4a5a6e;
+    --mono:     'Space Mono', monospace;
+    --sans:     'DM Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 16px 80px;
+    background-image:
+      radial-gradient(ellipse 80% 40% at 50% -10%, #00e5a012 0%, transparent 70%),
+      repeating-linear-gradient(0deg, transparent, transparent 39px, #1c243015 39px, #1c243015 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, #1c243015 39px, #1c243015 40px);
+  }
+
+  /* ── HEADER ── */
+  header {
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 36px;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    color: var(--green);
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(0.7)} }
+
+  #connectBtn {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    padding: 8px 18px;
+    background: transparent;
+    border: 1px solid var(--border2);
+    color: var(--text);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all .2s;
+    text-transform: uppercase;
+  }
+  #connectBtn:hover { border-color: var(--green); color: var(--green); }
+  #connectBtn.connected { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+
+  /* ── MARKET TITLE ── */
+  .market-card {
+    width: 100%;
+    max-width: 720px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px 28px;
+    margin-bottom: 24px;
+  }
+
+  .market-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .market-title {
+    font-size: 20px;
+    font-weight: 500;
+    color: #e8f0f8;
+    line-height: 1.4;
+    margin-bottom: 16px;
+  }
+
+  .market-meta {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .meta-pill {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 3px;
+    background: #131b25;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+  .meta-pill span { color: var(--amber); }
+
+  /* ── MAIN PANEL ── */
+  .main-panel {
+    width: 100%;
+    max-width: 720px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ── TOKEN SELECTOR ── */
+  .token-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .token-btn {
+    padding: 18px 24px;
+    background: var(--panel);
+    border: none;
+    cursor: pointer;
+    transition: background .15s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .token-btn:hover { background: #111820; }
+  .token-btn.active.yes  { background: #0a1a12; }
+  .token-btn.active.no   { background: #1a0a0e; }
+
+  .outcome-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+  }
+  .outcome-badge.yes { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+  .outcome-badge.no  { background: var(--red-dim);   color: var(--red);   border: 1px solid var(--red);   }
+
+  .token-info { display: flex; flex-direction: column; gap: 2px; }
+  .token-name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .token-id   { font-family: var(--mono); font-size: 9px; color: var(--muted); letter-spacing: 0.04em; }
+
+  .check-icon {
+    margin-left: auto;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px;
+    flex-shrink: 0;
+  }
+  .active .check-icon { background: var(--green); border-color: var(--green); color: #000; }
+
+  /* ── CHAIN SELECTOR ── */
+  .section { padding: 24px 28px; border-bottom: 1px solid var(--border); }
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  .chain-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .chain-btn {
+    flex: 1; min-width: 120px;
+    padding: 14px 18px;
+    background: #0a0f15;
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all .15s;
+    position: relative;
+  }
+  .chain-btn:hover { border-color: var(--muted); }
+  .chain-btn.active { border-color: var(--amber); background: #1a130a; }
+
+  .chain-icon { width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+  .chain-icon.poly  { background: #7b3fe420; }
+  .chain-icon.bsc   { background: #f0b90b20; }
+
+  .chain-check {
+    margin-left: auto;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border2);
+    flex-shrink: 0;
+  }
+  .active .chain-check { background: var(--amber); border-color: var(--amber); }
+
+  /* ── AMOUNT ── */
+  .amount-row { display: flex; align-items: center; gap: 12px; }
+  .amount-input {
+    flex: 1;
+    background: #0a0f15;
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-family: var(--mono);
+    font-size: 20px;
+    color: var(--text);
+    outline: none;
+    transition: border-color .15s;
+    -moz-appearance: textfield;
+  }
+  .amount-input::-webkit-outer-spin-button,
+  .amount-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .amount-input:focus { border-color: var(--green); }
+
+  .amount-max {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    padding: 8px 14px;
+    background: transparent;
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .15s;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .amount-max:hover { border-color: var(--amber); color: var(--amber); }
+
+  /* ── ACTION ── */
+  .action-section { padding: 20px 28px 28px; }
+
+  #mintBtn {
+    width: 100%;
+    padding: 16px;
+    background: var(--green);
+    border: none;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #060d0a;
+    cursor: pointer;
+    transition: all .2s;
+    position: relative;
+    overflow: hidden;
+  }
+  #mintBtn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent 0%, #ffffff20 50%, transparent 100%);
+    transform: translateX(-100%);
+    transition: transform .5s;
+  }
+  #mintBtn:hover::before { transform: translateX(100%); }
+  #mintBtn:hover { background: #00ffb3; transform: translateY(-1px); box-shadow: 0 8px 24px #00e5a040; }
+  #mintBtn:active { transform: translateY(0); }
+  #mintBtn:disabled { background: var(--border2); color: var(--muted); cursor: not-allowed; transform: none; box-shadow: none; }
+  #mintBtn:disabled::before { display: none; }
+
+  /* ── LOG ── */
+  #log {
+    margin-top: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.8;
+    color: var(--muted);
+    min-height: 20px;
+  }
+  #log .entry { display: flex; align-items: flex-start; gap: 8px; }
+  #log .entry.ok   { color: var(--green); }
+  #log .entry.err  { color: var(--red); }
+  #log .entry.info { color: var(--amber); }
+  #log .entry a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+  #log .ts { color: var(--muted); flex-shrink: 0; }
+
+  /* ── NETWORK WARN ── */
+  #networkWarn {
+    display: none;
+    width: 100%;
+    max-width: 720px;
+    margin-bottom: 16px;
+    background: #1a120a;
+    border: 1px solid var(--amber);
+    border-radius: 6px;
+    padding: 12px 20px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--amber);
+    letter-spacing: 0.04em;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 520px) {
+    .token-row { grid-template-columns: 1fr; }
+    .market-title { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    PredictSwap / Faucet
+  </div>
+  <button id="connectBtn" onclick="connectWallet()">Connect Wallet</button>
+</header>
+
+<div id="networkWarn">⚠ Wrong network — will auto-switch when you mint</div>
+
+<div class="market-card">
+  <div class="market-label">Active Market</div>
+  <div class="market-title">Trump out as President before 2027?</div>
+  <div class="market-meta">
+    <div class="meta-pill">Platform: <span>Opinion × Polymarket</span></div>
+    <div class="meta-pill">Resolution: <span>Before Jan 2027</span></div>
+    <div class="meta-pill">Max per tx: <span id="maxLabel">10,000 tokens</span></div>
+  </div>
+</div>
+
+<div class="main-panel">
+  <div class="panel-header">
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="#4a5a6e" stroke-width="1.5"/><line x1="6" y1="3" x2="6" y2="6.5" stroke="#4a5a6e" stroke-width="1.5" stroke-linecap="round"/><circle cx="6" cy="8.5" r="0.75" fill="#4a5a6e"/></svg>
+    Select outcome
+  </div>
+
+  <!-- Token selector -->
+  <div class="token-row">
+    <button class="token-btn yes active" id="btn-yes" onclick="selectOutcome('yes')">
+      <div class="outcome-badge yes">YES</div>
+      <div class="token-info">
+        <div class="token-name">Trump out before 2027</div>
+        <div class="token-id" id="yesId-display">Loading IDs...</div>
+      </div>
+      <div class="check-icon">✓</div>
+    </button>
+    <button class="token-btn no" id="btn-no" onclick="selectOutcome('no')">
+      <div class="outcome-badge no">NO</div>
+      <div class="token-info">
+        <div class="token-name">Trump stays until 2027</div>
+        <div class="token-id" id="noId-display">Loading IDs...</div>
+      </div>
+      <div class="check-icon"></div>
+    </button>
+  </div>
+
+  <!-- Chain selector -->
+  <div class="section">
+    <div class="section-label">Chain</div>
+    <div class="chain-row">
+      <button class="chain-btn active" id="chain-both" onclick="selectChain('both')">
+        <div class="chain-icon">⛓</div>
+        Both Chains
+        <div class="chain-check"></div>
+      </button>
+      <button class="chain-btn" id="chain-polygon" onclick="selectChain('polygon')">
+        <div class="chain-icon poly">⬡</div>
+        Polygon
+        <div class="chain-check"></div>
+      </button>
+      <button class="chain-btn" id="chain-bsc" onclick="selectChain('bsc')">
+        <div class="chain-icon bsc">◈</div>
+        BNB Chain
+        <div class="chain-check"></div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Amount -->
+  <div class="section">
+    <div class="section-label">Amount</div>
+    <div class="amount-row">
+      <input class="amount-input" type="number" id="amountInput" value="100" min="1" max="10000" />
+      <button class="amount-max" onclick="document.getElementById('amountInput').value=10000">Max</button>
+    </div>
+  </div>
+
+  <!-- Action -->
+  <div class="action-section">
+    <button id="mintBtn" disabled onclick="mint()">Connect wallet to mint</button>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────────────
+const CONFIG = {
+  polygon: {
+    chainId: 137,
+    chainIdHex: '0x89',
+    name: 'Polygon',
+    rpc: 'https://polygon-rpc.com',
+    explorer: 'https://polygonscan.com/tx/',
+    contract: '0x0157fc6cda37d23f801a1f0ae7a7fcad553ad496',
+    tokens: {
+      yes: 59252515735652674747158950210016502214756531287333895140318848923768750410355n,
+      no:  2849827372590072151380088930233312280478318575453624773762283369907909283027n,
+    },
+    symbol: 'MATIC',
+    addParams: {
+      chainId: '0x89',
+      chainName: 'Polygon Mainnet',
+      nativeCurrency: { name: 'MATIC', symbol: 'MATIC', decimals: 18 },
+      rpcUrls: ['https://polygon-rpc.com'],
+      blockExplorerUrls: ['https://polygonscan.com'],
+    }
+  },
+  bsc: {
+    chainId: 56,
+    chainIdHex: '0x38',
+    name: 'BNB Chain',
+    rpc: 'https://bsc-dataseed.binance.org',
+    explorer: 'https://bscscan.com/tx/',
+    contract: '0x9ae81582F2F2771CAE6320289E37bfEa8A106034',
+    tokens: {
+      yes: 68227038457866748595233145251243944054564947305383894629176574093714476769147n,
+      no:  23295406450705254064374249781739843340364170407721892525550504746101807113177n,
+    },
+    symbol: 'BNB',
+    addParams: {
+      chainId: '0x38',
+      chainName: 'BNB Smart Chain',
+      nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+      rpcUrls: ['https://bsc-dataseed.binance.org'],
+      blockExplorerUrls: ['https://bscscan.com'],
+    }
+  }
+};
+
+const ABI = [
+  'function faucet(address receiver, uint256 tokenId, uint256 amount) external',
+  'function maxFaucetAmount() view returns (uint256)'
+];
+
+// ── STATE ────────────────────────────────────────────────────────────────
+let walletAddress = null;
+let selectedOutcome = 'yes';
+let selectedChain = 'both';
+
+// ── INIT ─────────────────────────────────────────────────────────────────
+function shortId(id) {
+  const s = id.toString();
+  return s.slice(0, 6) + '...' + s.slice(-4);
+}
+
+document.getElementById('yesId-display').textContent =
+  `Poly: ${shortId(CONFIG.polygon.tokens.yes)} · BSC: ${shortId(CONFIG.bsc.tokens.yes)}`;
+document.getElementById('noId-display').textContent =
+  `Poly: ${shortId(CONFIG.polygon.tokens.no)} · BSC: ${shortId(CONFIG.bsc.tokens.no)}`;
+
+// ── WALLET ───────────────────────────────────────────────────────────────
+async function connectWallet() {
+  if (!window.ethereum) { logEntry('No wallet detected. Install MetaMask or Rabby.', 'err'); return; }
+  try {
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    walletAddress = accounts[0];
+    const btn = document.getElementById('connectBtn');
+    btn.textContent = walletAddress.slice(0,6) + '...' + walletAddress.slice(-4);
+    btn.classList.add('connected');
+    document.getElementById('mintBtn').disabled = false;
+    document.getElementById('mintBtn').textContent = 'Mint Test Tokens';
+    logEntry(`Connected: ${walletAddress}`, 'ok');
+
+    window.ethereum.on('accountsChanged', a => {
+      walletAddress = a[0] || null;
+      if (!walletAddress) { btn.textContent = 'Connect Wallet'; btn.classList.remove('connected'); document.getElementById('mintBtn').disabled = true; }
+      else { btn.textContent = walletAddress.slice(0,6)+'...'+walletAddress.slice(-4); }
+    });
+  } catch(e) { logEntry('Connection rejected.', 'err'); }
+}
+
+// ── CHAIN SWITCH ──────────────────────────────────────────────────────────
+async function switchChain(cfg) {
+  try {
+    await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: cfg.chainIdHex }] });
+  } catch(e) {
+    if (e.code === 4902) {
+      await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [cfg.addParams] });
+    } else throw e;
+  }
+}
+
+// ── MINT ─────────────────────────────────────────────────────────────────
+async function mint() {
+  if (!walletAddress) { logEntry('Connect wallet first.', 'err'); return; }
+  const amount = parseInt(document.getElementById('amountInput').value);
+  if (!amount || amount < 1) { logEntry('Enter a valid amount.', 'err'); return; }
+
+  const chains = selectedChain === 'both'
+    ? [CONFIG.polygon, CONFIG.bsc]
+    : [CONFIG[selectedChain]];
+
+  const btn = document.getElementById('mintBtn');
+  btn.disabled = true;
+  btn.textContent = 'Minting...';
+
+  for (const chain of chains) {
+    logEntry(`Switching to ${chain.name}...`, 'info');
+    try {
+      await switchChain(chain);
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(chain.contract, ABI, signer);
+      const tokenId = chain.tokens[selectedOutcome];
+
+      logEntry(`Sending ${amount} ${selectedOutcome.toUpperCase()} tokens on ${chain.name}...`, 'info');
+      const tx = await contract.faucet(walletAddress, tokenId, amount);
+      logEntry(`TX submitted on ${chain.name} — waiting...`, 'info');
+      const receipt = await tx.wait();
+      logEntry(
+        `✓ ${amount} ${selectedOutcome.toUpperCase()} minted on ${chain.name} — <a href="${chain.explorer}${receipt.hash}" target="_blank">view tx ↗</a>`,
+        'ok'
+      );
+    } catch(e) {
+      const msg = e?.reason || e?.message || 'Unknown error';
+      logEntry(`✗ ${chain.name} failed: ${msg.slice(0, 80)}`, 'err');
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Mint Test Tokens';
+}
+
+// ── UI SELECTORS ──────────────────────────────────────────────────────────
+function selectOutcome(o) {
+  selectedOutcome = o;
+  document.getElementById('btn-yes').classList.toggle('active', o === 'yes');
+  document.getElementById('btn-no').classList.toggle('active', o === 'no');
+  document.getElementById('btn-yes').querySelector('.check-icon').textContent = o === 'yes' ? '✓' : '';
+  document.getElementById('btn-no').querySelector('.check-icon').textContent = o === 'no' ? '✓' : '';
+}
+
+function selectChain(c) {
+  selectedChain = c;
+  ['both','polygon','bsc'].forEach(id => {
+    document.getElementById('chain-' + id).classList.toggle('active', id === c);
+  });
+}
+
+// ── LOG ───────────────────────────────────────────────────────────────────
+function logEntry(msg, type = 'info') {
+  const log = document.getElementById('log');
+  const now = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  const div = document.createElement('div');
+  div.className = `entry ${type}`;
+  div.innerHTML = `<span class="ts">[${now}]</span> ${msg}`;
+  log.prepend(div);
+}
+</script>
+</body>
+</html>
