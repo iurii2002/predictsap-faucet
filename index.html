@@ -645,7 +645,7 @@ async function mint() {
       const tokenId = chain.tokens[selectedOutcome];
 
       logEntry(`Minting ${amount} ${selectedOutcome.toUpperCase()} → ${receiverLabel} on ${chain.name}...`, 'info');
-      const tx = await contract.faucet(receiver, tokenId, amount);
+      const tx = await contract.faucet(receiver, tokenId, BigInt(amount) * 10n ** 18n);
       logEntry(`TX submitted on ${chain.name} — waiting...`, 'info');
       const receipt = await tx.wait();
       logEntry(
