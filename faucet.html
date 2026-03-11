@@ -280,6 +280,21 @@
   }
   .amount-max:hover { border-color: var(--amber); color: var(--amber); }
 
+  /* ── RECEIVER ── */
+  .receiver-row { display: flex; align-items: center; gap: 12px; }
+  .receiver-input { font-size: 13px !important; letter-spacing: 0.02em; }
+  .receiver-input.invalid { border-color: var(--red) !important; }
+  .receiver-input.valid   { border-color: var(--green) !important; }
+  #receiverStatus {
+    margin-top: 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    min-height: 16px;
+  }
+  #receiverStatus.ok  { color: var(--green); }
+  #receiverStatus.err { color: var(--red); }
+
   /* ── ACTION ── */
   .action-section { padding: 20px 28px 28px; }
 
@@ -431,6 +446,16 @@
     </div>
   </div>
 
+  <!-- Receiver -->
+  <div class="section">
+    <div class="section-label">Receiver address</div>
+    <div class="receiver-row">
+      <input class="amount-input receiver-input" type="text" id="receiverInput" placeholder="0x... (defaults to connected wallet)" spellcheck="false" />
+      <button class="amount-max" id="selfBtn" onclick="setSelf()">Self</button>
+    </div>
+    <div id="receiverStatus"></div>
+  </div>
+
   <!-- Action -->
   <div class="action-section">
     <button id="mintBtn" disabled onclick="mint()">Connect wallet to mint</button>
@@ -515,6 +540,11 @@ async function connectWallet() {
     btn.classList.add('connected');
     document.getElementById('mintBtn').disabled = false;
     document.getElementById('mintBtn').textContent = 'Mint Test Tokens';
+    // auto-fill receiver with self
+    const ri = document.getElementById('receiverInput');
+    if (ri && !ri.value) { ri.value = walletAddress; ri.classList.add('valid'); }
+    const rs = document.getElementById('receiverStatus');
+    if (rs) { rs.textContent = '✓ Using your connected wallet'; rs.className = 'ok'; }
     logEntry(`Connected: ${walletAddress}`, 'ok');
 
     window.ethereum.on('accountsChanged', a => {
@@ -536,11 +566,66 @@ async function switchChain(cfg) {
   }
 }
 
+// ── RECEIVER ─────────────────────────────────────────────────────────────
+function setSelf() {
+  if (!walletAddress) { logEntry('Connect wallet first.', 'err'); return; }
+  const input = document.getElementById('receiverInput');
+  input.value = walletAddress;
+  input.classList.remove('invalid');
+  input.classList.add('valid');
+  const status = document.getElementById('receiverStatus');
+  status.textContent = '✓ Using your connected wallet';
+  status.className = 'ok';
+}
+
+function getReceiver() {
+  const raw = document.getElementById('receiverInput').value.trim();
+  if (!raw) return walletAddress; // empty = self
+  try {
+    return ethers.getAddress(raw); // validates + checksums
+  } catch {
+    return null;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('receiverInput');
+  if (input) {
+    input.addEventListener('input', () => {
+      const val = input.value.trim();
+      const status = document.getElementById('receiverStatus');
+      if (!val) {
+        input.classList.remove('invalid', 'valid');
+        status.textContent = '';
+        status.className = '';
+        return;
+      }
+      try {
+        ethers.getAddress(val);
+        input.classList.remove('invalid'); input.classList.add('valid');
+        status.textContent = '✓ Valid address';
+        status.className = 'ok';
+      } catch {
+        input.classList.remove('valid'); input.classList.add('invalid');
+        status.textContent = '✗ Invalid Ethereum address';
+        status.className = 'err';
+      }
+    });
+  }
+});
+
 // ── MINT ─────────────────────────────────────────────────────────────────
 async function mint() {
   if (!walletAddress) { logEntry('Connect wallet first.', 'err'); return; }
+
+  const receiver = getReceiver();
+  if (!receiver) { logEntry('Invalid receiver address.', 'err'); return; }
+
   const amount = parseInt(document.getElementById('amountInput').value);
   if (!amount || amount < 1) { logEntry('Enter a valid amount.', 'err'); return; }
+
+  const isSelf = receiver.toLowerCase() === walletAddress.toLowerCase();
+  const receiverLabel = isSelf ? 'self' : receiver.slice(0,6)+'...'+receiver.slice(-4);
 
   const chains = selectedChain === 'both'
     ? [CONFIG.polygon, CONFIG.bsc]
@@ -559,12 +644,12 @@ async function mint() {
       const contract = new ethers.Contract(chain.contract, ABI, signer);
       const tokenId = chain.tokens[selectedOutcome];
 
-      logEntry(`Sending ${amount} ${selectedOutcome.toUpperCase()} tokens on ${chain.name}...`, 'info');
-      const tx = await contract.faucet(walletAddress, tokenId, amount);
+      logEntry(`Minting ${amount} ${selectedOutcome.toUpperCase()} → ${receiverLabel} on ${chain.name}...`, 'info');
+      const tx = await contract.faucet(receiver, tokenId, amount);
       logEntry(`TX submitted on ${chain.name} — waiting...`, 'info');
       const receipt = await tx.wait();
       logEntry(
-        `✓ ${amount} ${selectedOutcome.toUpperCase()} minted on ${chain.name} — <a href="${chain.explorer}${receipt.hash}" target="_blank">view tx ↗</a>`,
+        `✓ ${amount} ${selectedOutcome.toUpperCase()} minted to ${receiverLabel} on ${chain.name} — <a href="${chain.explorer}${receipt.hash}" target="_blank">view tx ↗</a>`,
         'ok'
       );
     } catch(e) {
